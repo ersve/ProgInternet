@@ -5,28 +5,30 @@ import java.net.Socket;
 
 
 public class ClientHandler extends Thread {
-    private Socket          client   = null;
-    private Server          server   = null;
-    private int             ID       = -1;
-    private DataInputStream in       = null;
-    private DataOutputStream out     = null;
-    private volatile boolean shutdown = false;
+    private Socket client = null;
+    private Server server = null;
+    private int ID = -1;
+    private String IP = null;
+    private BufferedReader reader = null;
+    private PrintWriter writer = null;
+
 
 
     public ClientHandler(Server s, Socket socket) {
         server = s;
         client = socket;
         ID = client.getPort();
+        IP = client.getInetAddress().getHostName();
     }
 
     public void send(String message) {
-        try{
-            out.writeUTF(message);
-            out.flush();
-        }catch (Exception e){
+        try {
+            writer.println(message);
+            writer.flush();
+        } catch (Exception e) {
             System.out.println(ID + " ERROR sending: " + e.getMessage());
             server.removeClient(ID);
-            shutdown();
+
         }
     }
 
@@ -34,36 +36,44 @@ public class ClientHandler extends Thread {
         return this.ID;
     }
 
+    public String getIP() {
+        return this.IP;
+    }
+
     public void open() throws IOException {
-        in = new DataInputStream(new
-                BufferedInputStream(client.getInputStream()));
-        out = new DataOutputStream(new
-                BufferedOutputStream(client.getOutputStream()));
+        reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
+        writer = new PrintWriter(new OutputStreamWriter(client.getOutputStream(), "ISO-8859-1"), true);
     }
 
     public void close() throws IOException {
-        if (in != null)  in.close();
-        if (out != null) out.close();
-        if (client != null)  client.close();
+        if (reader != null) reader.close();
+        if (writer != null) writer.close();
+        if (client != null) client.close();
     }
-    public void shutdown(){
-        this.shutdown = true;
-    }
+
 
     @Override
     public void run() {
-        System.out.println("Server Thread " + ID + " running.");
-        while (!shutdown){
-            try {
-                server.handleClient(ID, in.readUTF());
-            }catch (IOException e){
-                System.out.println(ID + " ERROR reading: " + e.getMessage());
-                server.removeClient(ID);
-                shutdown();
+        System.out.println("Serving client " + ID + ".");
+        String message = null;
+        String print = "Correct termination of connection.";
+        try {
+            while ((message = reader.readLine()) != null) {
+                //Do stuff with the message
+                server.handleClient(ID, message);
             }
+            close();
+        } catch (IOException e) {
+            print = "Incorrect termination of connection.";
         }
 
+        System.out.println(ID + ":" + print);
+        server.removeClient(ID);
     }
-
 }
+
+
+
+
+
 

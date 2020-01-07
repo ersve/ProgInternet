@@ -5,24 +5,29 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 
-public class Server implements Runnable {
+public class Server implements Runnable{
     private int MAX_CLIENTS = 50;
     private int connections = 0;
     public String exitString = "exit";
     private ClientHandler clients[] = new ClientHandler[MAX_CLIENTS];
     private ServerSocket server = null;
     private Thread thread = null;
+    private ServerGui gui = null;
 
 
-    public Server(int port) {
+    public Server(int port, ServerGui serverGui) {
+        gui = serverGui;
         try {
             System.out.println("Binding to port " + port + ", please wait  ...");
+            gui.display("Binding to port " + port + ", please wait  ...\n");
             server = new ServerSocket(port);
             System.out.println("Server started: " + server);
+            gui.display("Server started: " + server +"\n");
             start();
 
         } catch (IOException e) {
             System.out.println("Can not bind to port " + port + ": " + e.getMessage());
+            gui.display("Can not bind to port " + port + ": " + e.getMessage());
         }
     }
 
@@ -31,11 +36,24 @@ public class Server implements Runnable {
         while ( thread != null) {
             try {
                 System.out.println("Waiting for a client ...");
+                gui.display("Waiting for a client ...");
                 addClient(server.accept());
             } catch (Exception e) {
                 System.out.println("Server accept error: " + e);
+                gui.display("Server accept error: " + e.getMessage());
                 stop();
             }
+        }
+        //Close down all clients
+        for (int i = 0; i<connections;i++ ) {
+            if( clients[i] != null) {
+                try{
+                clients[i].close();
+                 } catch (IOException e){
+                    //nothing to be done here
+                }
+            }
+
         }
 
     }
@@ -54,14 +72,17 @@ public class Server implements Runnable {
 
     }
 
+
+
     public synchronized void handleClient(int ID, String message) {
-        System.out.println("Got message: " + message);
+
         if (message.equals(exitString)) {
             clients[findClient(ID)].send(exitString);
-            removeClient(ID);
+
         } else {
+            gui.display(clients[findClient(ID)].getIP()+":"+ID + ":" + message);
             for (int i = 0; i < connections; i++) {
-                clients[i].send(ID + ":" + message);
+                clients[i].send(clients[findClient(ID)].getIP()+":"+ID + ":" + message);
             }
         }
 
@@ -70,9 +91,9 @@ public class Server implements Runnable {
 
     public synchronized void removeClient(int ID) {
         int position = findClient(ID);
-        if (position > 0) {
+        if (position > -1) {
             ClientHandler toRemove = clients[position];
-            //removing client with id
+
 
             if (position < connections - 1) {
                 for (int i = position + 1; i < connections; i++) {
@@ -83,8 +104,11 @@ public class Server implements Runnable {
             try {
                 toRemove.close();
             } catch (Exception e) {
-                System.out.println("Error closing thread: " + e);
-                toRemove.shutdown();
+                System.out.println("Error closing thread: " + e.getMessage());
+                gui.display("Error closing thread: " + e.getMessage());
+            }finally {
+                System.out.println("Removed client " + toRemove.getIP()+":"+ ID +" at " + position);
+                gui.display("Removed client " + toRemove.getIP()+":"+ ID +" at " + position +"\n");
             }
         }
     }
@@ -100,7 +124,8 @@ public class Server implements Runnable {
 
     public void addClient(Socket client) {
         if (connections < MAX_CLIENTS) {
-            //Client accepted
+            System.out.println("Client accepted: " + client);
+            gui.display("Client accepted: " + client +"\n");
             clients[connections] = new ClientHandler(this, client);
             try {
                 clients[connections].open();
@@ -111,23 +136,20 @@ public class Server implements Runnable {
             }
         } else {
             System.out.println("Client refused: maximum " + clients.length + " reached.");
+            gui.display("Client refused: maximum " + clients.length + " reached." +"\n");
         }
+        return;
 
     }
+
 
     public static void main(String[] args) {
 
         // Check if port number is assigned from input, else use port 2000
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 2000;
         // Start server
-        Server server = new Server(port);
-        try {
-            Thread.sleep(1000);
-        }catch (Exception e){
+        //Server server = new Server(port);
 
-        }finally {
-            server.stop();
-        }
     }
 }
 
